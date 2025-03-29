@@ -6,6 +6,7 @@ using System.Numerics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
@@ -25,7 +26,7 @@ internal class MainWindow : Window, IDisposable
     private readonly IClientState _clientStateService;
     private readonly ITextureProvider _textureProvidereService;
     private readonly InputService _inputService;
-    
+
     public MainWindow(
         ConfigurationService configService,
         IClientState clientStateService,
@@ -47,7 +48,7 @@ internal class MainWindow : Window, IDisposable
             MaximumSize = new Vector2(2000, 5000),
             MinimumSize = new Vector2(270, 200)
         };
-        
+
         input.AddListener(KeyBindEvents.Interface_TogglePoseBrowserWindow, this.OnMainWindowToggle);
         input.AddListener(KeyBindEvents.Posing_PreviewHovering, this.KeyDownPreviewPoseHovered);
     }
@@ -159,7 +160,7 @@ internal class MainWindow : Window, IDisposable
     // Draw window
     public override void Draw()
     {
-        
+
         // todo: check if in gpose
         if (!_clientStateService.IsGPosing)
             return;
@@ -174,7 +175,7 @@ internal class MainWindow : Window, IDisposable
 
         // PoseBrowser.Log.Debug($"UserPreviewingPoseHovered: {UserPreviewingPoseHovered_previous} => {UserPreviewingPoseHovered}");
         if (UserPreviewingPoseHovered_previous != UserPreviewingPoseHovered && !UserPreviewingPoseHovered)
-            KeyUpPreviewPoseHovered(); 
+            KeyUpPreviewPoseHovered();
         UserPreviewingPoseHovered_previous = UserPreviewingPoseHovered;
 
         DrawImageModal();
@@ -360,7 +361,7 @@ internal class MainWindow : Window, IDisposable
                 var textWrap = texture.GetWrapOrEmpty();
 
                 //PluginLog.Debug($"display image {imagePath}");
-                // if (ImageModalSize == default) 
+                // if (ImageModalSize == default)
                 ImageModalSize = ScaleImageIfBigger(texture.GetWrapOrEmpty(), ImGui.GetIO().DisplaySize * 0.75f);
                 var mouseWheel = ImGui.GetIO().MouseWheel;
 
@@ -435,10 +436,27 @@ internal class MainWindow : Window, IDisposable
     private void DrawToolBar(int hits)
     {
 
-        Vector4? syncColor = _currentlySyncing ? (_currentlySyncingImages ? new(0.8f, 0.8f, 0.4f, 1f) : new(0.8f, 0.4f, 0.4f, 1f)) : null;   
+        Vector4? syncColor = _currentlySyncing ? (_currentlySyncingImages ? new(0.8f, 0.8f, 0.4f, 1f) : new(0.8f, 0.4f, 0.4f, 1f)) : null;
         if (ImPO.IconButtonTooltip(Dalamud.Interface.FontAwesomeIcon.Sync, "Refresh poses and images", default,
                                    $"SyncButton##PoseBrowser"))
             Sync();
+
+        ImGui.SameLine();
+        var importPoseInsteadOfReset = _configurationService.Configuration.IPC.SaveAndResporePoseInsteadOfReset;
+        var hoverKeyTooltip = "";
+        if (_configurationService.Configuration.Input.Bindings.TryGetValue(KeyBindEvents.Posing_PreviewHovering, out var hoveringKeybind) && hoveringKeybind != null)
+        {
+            hoverKeyTooltip = $"(Key {hoveringKeybind.Key.GetFancyName()}) ";
+        }
+
+        var importPoseInsteadOfResetTooltip = $"Change the behaviour when releasing the hold pose {hoverKeyTooltip}." +
+                                              $"\nEnabled: On holding {hoverKeyTooltip}, save the previous pose in memory. On release {hoverKeyTooltip}, restore the saved pose." +
+                                              $"\nDisabled: On release {hoverKeyTooltip}, reset the pose (do not clear the undo history)." +
+                                              $"\nWarning: changing target while holding {hoverKeyTooltip} may have unexpected results.";
+        ImPO.IconButtonToggle(Dalamud.Interface.FontAwesomeIcon.Jar, ref importPoseInsteadOfReset, importPoseInsteadOfResetTooltip, default, $"importPoseInsteadOfReset##PoseBrowser");
+        if(_configurationService.Configuration.IPC.SaveAndResporePoseInsteadOfReset != importPoseInsteadOfReset) _configurationService.Configuration.IPC.SaveAndResporePoseInsteadOfReset = importPoseInsteadOfReset;
+
+
 
         ImGui.SameLine(0, ImGui.GetFontSize());
         ImGui.Text($"({hits})");
@@ -553,7 +571,7 @@ internal class MainWindow : Window, IDisposable
 
     private void SyncImageFiles()
         => Task.Run(SyncImageFilesAsync);
-    
+
 
     private bool _currentlySyncingImages = false;
     private void SyncImageFilesAsync()
@@ -573,11 +591,11 @@ internal class MainWindow : Window, IDisposable
             _currentlySyncingImages = false;
         }
     }
-        
+
 
     private void Sync()
         => Task.Run(SyncAsync);
-    
+
     private bool _currentlySyncing = false;
 	private void SyncAsync() {
         if (_currentlySyncing) return;
@@ -586,8 +604,8 @@ internal class MainWindow : Window, IDisposable
         ClearImageCache(); // todo: find a better way to sync
 
         _currentlySyncing = true;
-        
-        
+
+
 		// Todo: check if already loaded and prevets it
 		//ClearImageCache();
 		ShortPath = new("^(" + String.Join("|", _configurationService.Configuration.Filesystem.BrowserLibraryPaths.Select(p => Regex.Escape(p))) + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -628,7 +646,7 @@ internal class MainWindow : Window, IDisposable
     {
         if (!_brioService.IsBrioAvailable) return;
         if (!_clientStateService.IsGPosing) return;
-        
+
         if (flags.HasFlag(ImportPoseFlags.ResetPreview))
             FileInPreview = null;
 
@@ -663,7 +681,7 @@ internal class MainWindow : Window, IDisposable
 
 	private (Vector2, Vector2) CropRatioImage(IDalamudTextureWrap image) {
 
-        
+
 		float left = 0, top = 0, right = 1, bottom = 1;
 
 		float sourceAspectRatio = (float)image.Width / image.Height;
@@ -715,7 +733,7 @@ internal class MainWindow : Window, IDisposable
 		else
 			return new Vector2(image.Width, image.Height);
 	}
-    
+
     public void FindImage(BrowserPoseFile browserPoseFile) {
 		// Add embedded image if exists
 		browserPoseFile.ImagePath = browserPoseFile.FindEmbeddedImage();
@@ -776,5 +794,5 @@ internal class BrowserPoseFile {
 		return null;
 	}
 
-   
+
 }

@@ -74,6 +74,7 @@ public sealed class PoseBrowser : IDalamudPlugin
         serviceCollection.AddSingleton(dalamudServices.ClientState);
         serviceCollection.AddSingleton(dalamudServices.Log);
         serviceCollection.AddSingleton(dalamudServices.KeyState);
+        serviceCollection.AddSingleton(dalamudServices.TargetManager);
 
         // Core / Misc
         serviceCollection.AddSingleton<ConfigurationService>();

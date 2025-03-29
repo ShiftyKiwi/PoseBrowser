@@ -1,3 +1,4 @@
+using Dalamud.Game.ClientState.Objects;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -13,6 +14,7 @@ internal class DalamudServices
     [PluginService] public IClientState ClientState { get; private set; } = null!;
     [PluginService] public IPluginLog Log { get; private set; } = null!;
     [PluginService] public IKeyState KeyState { get; private set; } = null!;
+    [PluginService] public ITargetManager TargetManager { get; private set; } = null!;
 
 
 
