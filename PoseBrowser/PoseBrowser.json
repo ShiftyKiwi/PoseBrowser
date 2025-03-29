@@ -7,7 +7,7 @@
     "AssemblyVersion": "0.0.0.16",
     "InternalName": "PoseBrowse",
     "ApplicableVersion": "any",
-    "DalamudApiLevel": 10,
+    "DalamudApiLevel": 12,
     "Tags": [
         "gpose", 
         "brio",
