@@ -10,7 +10,7 @@ using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using PoseBrowser.Config;
 using PoseBrowser.Files;
 using PoseBrowser.Input;
@@ -188,7 +188,7 @@ internal class MainWindow : Window, IDisposable
         DrawToolBar(files.Count);
         ImGui.Spacing();
 
-        ImGui.BeginChildFrame(76, ImGui.GetContentRegionAvail());
+        ImGui.BeginChild("PoseBrowserFileGrid", ImGui.GetContentRegionAvail());
         bool anyHovered = false;
         int col = 1;
         try
@@ -216,10 +216,10 @@ internal class MainWindow : Window, IDisposable
                     if (CropImages)
                     {
                         (var uv0, var uv1) = CropRatioImage(textureWrap);
-                        ImGui.ImageButton(textureWrap.ImGuiHandle, ThumbSize2D, uv0, uv1);
+                        ImGui.ImageButton(textureWrap.Handle, ThumbSize2D, uv0, uv1);
                     }
                     else
-                        ImGui.ImageButton(textureWrap.ImGuiHandle, ScaleThumbImage(textureWrap));
+                        ImGui.ImageButton(textureWrap.Handle, ScaleThumbImage(textureWrap));
 
                     ImGui.PopStyleVar();
                     ImGui.PopStyleColor();
@@ -330,7 +330,7 @@ internal class MainWindow : Window, IDisposable
         {
             PoseBrowser.Log.Debug(e,"Suppressed error during file loop");
         }
-        ImGui.EndChildFrame();
+        ImGui.EndChild();
 
         // ImGui.End();
     }
@@ -377,7 +377,7 @@ internal class MainWindow : Window, IDisposable
                     ImGui.SetClipboardText(imagePath);
 
                 // PoseBrowser.Log.Debug($"file {texture.GetWrapOrDefault()?.Height} exists: {File.Exists(imagePath)} path: {imagePath}");
-                ImGui.Image(texture.GetWrapOrEmpty().ImGuiHandle, ImageModalSize);
+                ImGui.Image(texture.GetWrapOrEmpty().Handle, ImageModalSize);
                 isImageClickedLeft = ImGui.IsItemClicked(ImGuiMouseButton.Left);
                 isImageClickedRight = ImGui.IsItemClicked(ImGuiMouseButton.Right);
 

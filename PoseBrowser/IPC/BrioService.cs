@@ -5,13 +5,18 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
+using Dalamud.Plugin.Services;
 using PoseBrowser.Config;
 
 namespace PoseBrowser.IPC;
 
 internal class BrioService : IDisposable
 {
+    private const int MinimumSupportedBrioApiMajor = 2;
+
     public bool IsBrioAvailable { get; private set; } = false;
+    public (int Major, int Minor) LastDetectedApiVersion { get; private set; } = default;
+    public string StatusMessage { get; private set; } = "Brio status not checked yet.";
     private readonly IDalamudPluginInterface _pluginInterface;
     private readonly ConfigurationService _configurationService;
     private readonly ITargetManager _targetManager;
@@ -49,7 +54,15 @@ internal class BrioService : IDisposable
 
     public (int, int) ApiVersion()
     {
-        return ApiVersionIpc?.InvokeFunc() ?? default;
+        try
+        {
+            return ApiVersionIpc?.InvokeFunc() ?? default;
+        }
+        catch(Exception ex)
+        {
+            PoseBrowser.Log.Debug(ex, "Failed to query Brio API version");
+            return default;
+        }
     }
     public bool ImportPoseTarget(string path)
     {
@@ -102,7 +115,9 @@ internal class BrioService : IDisposable
         }
         else
         {
+            LastDetectedApiVersion = default;
             IsBrioAvailable = false;
+            StatusMessage = "Brio integration disabled in PoseBrowser settings.";
         }
     }
 
@@ -114,16 +129,30 @@ internal class BrioService : IDisposable
 
             if(!brioInstalled)
             {
+                LastDetectedApiVersion = default;
+                StatusMessage = "Brio is not installed or not currently loaded.";
                 PoseBrowser.Log.Debug("Brio not present");
                 return false;
             }
 
+            var apiVersion = ApiVersion();
+            LastDetectedApiVersion = apiVersion;
+            if(apiVersion.Item1 < MinimumSupportedBrioApiMajor)
+            {
+                StatusMessage = $"Detected Brio API {apiVersion}, but PoseBrowser requires {MinimumSupportedBrioApiMajor}.x or newer.";
+                PoseBrowser.Log.Warning($"Brio detected but API {apiVersion} is unsupported. Expected >= {MinimumSupportedBrioApiMajor}.x.");
+                return false;
+            }
+
+            StatusMessage = $"Connected to Brio API {apiVersion}.";
             PoseBrowser.Log.Debug("Brio integration initialized");
 
             return true;
         }
         catch(Exception ex)
         {
+            LastDetectedApiVersion = default;
+            StatusMessage = "Failed to initialize Brio IPC. Check plugin log for details.";
             PoseBrowser.Log.Debug(ex, "Brio initialize error");
             return false;
         }

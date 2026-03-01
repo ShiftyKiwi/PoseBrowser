@@ -51,6 +51,9 @@ public sealed class PoseBrowser : IDalamudPlugin
                         _services.GetRequiredService(service.ServiceType);
                     }
                 }
+
+                var brioService = _services.GetRequiredService<BrioService>();
+                Log.Info($"Runtime {Environment.Version}; Brio status: {brioService.StatusMessage}");
                 
                 Log.Info($"Started {Name} in {stopwatch.ElapsedMilliseconds}ms");
             }

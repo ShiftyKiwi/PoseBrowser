@@ -2,7 +2,7 @@ using System;
 using System.Numerics;
 using Dalamud.Interface;
 using Dalamud.Utility;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 
 namespace PoseBrowser.UI.Controls;
 
@@ -43,13 +43,8 @@ internal class ImPO
 	public static bool IconButtonHoldConfirm(FontAwesomeIcon icon, string tooltip, Vector2 size = default, string hiddenLabel = "") =>
 		IconButtonHoldConfirm(icon, tooltip, ImGui.GetIO().KeyCtrl && ImGui.GetIO().KeyShift, size, hiddenLabel);
 
-    public static Vector4 VisibleCheckmarkColor() {
-		var currentCol = ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark];
-		ImGui.ColorConvertRGBtoHSV(currentCol.X, currentCol.Y, currentCol.Z, out var h, out var s, out var v);
-		s = 0.55f;
-		v = Math.Clamp(v * 1.25f, 0.0f, 1.0f);
-		ImGui.ColorConvertHSVtoRGB(h, s, v, out currentCol.X, out currentCol.Y, out currentCol.Z);
-		return currentCol;
+	public static Vector4 VisibleCheckmarkColor() {
+		return ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark];
 	}
     public static void Tooltip(string text) {
 		if (!text.IsNullOrWhitespace() && ImGui.IsItemHovered()) {

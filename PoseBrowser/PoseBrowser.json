@@ -1,13 +1,13 @@
 {
-    "Author": "Emyxiv",
+    "Author": "Shifty Kiwi",
     "Name": "Pose Browser",
     "Punchline": "A pose browser to work with Brio.",
     "Description": "A pose browser interfacing with brio.", 
-    "RepoUrl": "https://github.com/emyxiv/PoseBrowser",
-    "AssemblyVersion": "0.0.0.16",
+    "RepoUrl": "https://github.com/ShiftyKiwi/PoseBrowser",
+    "AssemblyVersion": "0.0.0.22",
     "InternalName": "PoseBrowse",
     "ApplicableVersion": "any",
-    "DalamudApiLevel": 12,
+    "DalamudApiLevel": 14,
     "Tags": [
         "gpose", 
         "brio",

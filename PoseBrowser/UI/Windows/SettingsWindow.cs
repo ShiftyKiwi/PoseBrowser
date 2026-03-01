@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using PoseBrowser.Config;
 using PoseBrowser.Input;
 using PoseBrowser.IPC;
@@ -69,10 +69,14 @@ internal class SettingsWindow : Window
 
     private void DrawBrioIPC()
     {
-        ImGui.Text(_brioService.IsBrioAvailable ? "Brio available" : "No brio available");
-        if (!_brioService.IsBrioAvailable) return;
-        
-        ImGui.Text($"Version {_brioService.ApiVersion()}");
+        ImGui.Text(_brioService.IsBrioAvailable ? "Brio available" : "Brio unavailable");
+        ImGui.TextWrapped(_brioService.StatusMessage);
+
+        var detectedVersion = _brioService.LastDetectedApiVersion;
+        if(detectedVersion != default)
+        {
+            ImGui.Text($"Detected API {detectedVersion}");
+        }
     }
     
     private void DrawKeysTab()

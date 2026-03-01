@@ -4,7 +4,7 @@ using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using System;
 using System.Collections.Generic;
 using PoseBrowser.Config;
@@ -87,13 +87,9 @@ internal class UIManager : IDisposable
         _mainWindow.IsOpen = true;
     }
 
-    private void ActivePluginsChanged(PluginListInvalidationKind kind, bool affectedThisPlugin)
+    private void ActivePluginsChanged(IActivePluginsChangedEventArgs args)
     {
-        foreach(var plugin in _pluginInterface.InstalledPlugins)
-        {
-            PoseBrowser.Log.Debug($"InstalledPlugins: {plugin}");
-        }
-        
+        _brioService.RefreshBrioStatus();
     }
     
 
@@ -144,7 +140,8 @@ internal class UIManager : IDisposable
     public void Dispose()
     {
         _configurationService.OnConfigurationChanged -= ApplySettings;
-        _pluginInterface.UiBuilder.Draw -= _windowSystem.Draw;
+        _pluginInterface.ActivePluginsChanged -= ActivePluginsChanged;
+        _pluginInterface.UiBuilder.Draw -= DrawUI;
         _pluginInterface.UiBuilder.OpenConfigUi -= ShowSettingsWindow;
         _pluginInterface.UiBuilder.OpenMainUi -= ShowMainWindow;
 
