@@ -239,7 +239,6 @@ internal class BrioService : IDisposable
             }
 
             CopyBoneProperty(targetBone, sourceBone, "Rotation");
-            CopyBoneProperty(targetBone, sourceBone, "Scale");
         }
 
         return mergedRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
