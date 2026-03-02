@@ -8,6 +8,7 @@ using Dalamud.Plugin.Services;
 using Dalamud.Bindings.ImGui;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using PoseBrowser.Config;
 using PoseBrowser.IPC;
 using PoseBrowser.UI.Windows;
@@ -98,9 +99,11 @@ internal class UIManager : IDisposable
 
     public void ShowMainWindow()
     {
+        _mainWindow.Position = new Vector2(120f, 120f);
+        _mainWindow.PositionCondition = ImGuiCond.Always;
         _mainWindow.IsOpen = true;
         _mainWindow.BringToFront();
-        PoseBrowser.Log.Debug("PoseBrowser main window opened");
+        PoseBrowser.Log.Info("PoseBrowser main window opened at forced position");
     }
 
     private void OnMainCommand(string command, string arguments)
