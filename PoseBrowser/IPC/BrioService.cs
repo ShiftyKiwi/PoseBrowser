@@ -67,26 +67,57 @@ internal class BrioService : IDisposable
     public bool ImportPoseTarget(string path)
     {
         var gameObject = GetTargetGameObject();
-        if(gameObject == null) return false;
+        if(gameObject == null)
+        {
+            PoseBrowser.Log.Warning("Pose import failed: no valid target found for Brio pose application.");
+            return false;
+        }
 
         // save current pose
         var savingJson = ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
-        if(savingJson == null) return false;
+        if(savingJson == null)
+        {
+            PoseBrowser.Log.Warning($"Pose import failed: Brio did not return current pose JSON for target {gameObject.Name}.");
+            return false;
+        }
         LastPoseSaved = savingJson;
 
         // apply pose
-        return ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false;
+        var loaded = ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false;
+        if(!loaded)
+        {
+            PoseBrowser.Log.Warning($"Pose import failed: Brio rejected file '{path}' for target {gameObject.Name}.");
+        }
+        else
+        {
+            PoseBrowser.Log.Info($"Applied pose '{path}' to target {gameObject.Name}.");
+        }
+
+        return loaded;
     }
     private IGameObject? GetTargetGameObject()
     {
-        if (_targetManager.GPoseTarget != null && _targetManager.GPoseTarget.ObjectKind == ObjectKind.Player) {
-            var obj = _targetManager.GPoseTarget;
-            PoseBrowser.Log.Debug($"object found: {obj.Name}");
-            return obj;
+        var candidates = new IGameObject?[]
+        {
+            _targetManager.GPoseTarget,
+            _targetManager.Target,
+            _targetManager.FocusTarget,
+        };
 
+        foreach (var candidate in candidates)
+        {
+            if (candidate == null)
+                continue;
+
+            PoseBrowser.Log.Debug($"Evaluating pose target candidate: {candidate.Name} ({candidate.ObjectKind})");
+            if (candidate.ObjectKind == ObjectKind.Player)
+            {
+                return candidate;
+            }
         }
-        return null;
 
+        PoseBrowser.Log.Warning("No player target found in GPoseTarget, Target, or FocusTarget.");
+        return null;
     }
 
 
@@ -94,15 +125,29 @@ internal class BrioService : IDisposable
     public bool UndoTarget()
     {
         // verify if there is any pose to restore
-        if(LastPoseSaved == null) return false;
+        if(LastPoseSaved == null)
+        {
+            PoseBrowser.Log.Warning("Undo failed: no previously saved pose exists.");
+            return false;
+        }
 
         var gameObject = GetTargetGameObject();
-        if(gameObject == null) return false;
+        if(gameObject == null)
+        {
+            PoseBrowser.Log.Warning("Undo failed: no valid target found.");
+            return false;
+        }
 
         if (_configurationService.Configuration.IPC.SaveAndResporePoseInsteadOfReset) {
-            return ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, LastPoseSaved, false) ?? false;
+            var restored = ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, LastPoseSaved, false) ?? false;
+            if(!restored)
+                PoseBrowser.Log.Warning($"Undo failed: Brio could not restore saved pose for {gameObject.Name}.");
+            return restored;
         }
-        return ActorPoseResetIPC?.InvokeFunc(gameObject, false) ?? false;
+        var reset = ActorPoseResetIPC?.InvokeFunc(gameObject, false) ?? false;
+        if(!reset)
+            PoseBrowser.Log.Warning($"Undo failed: Brio could not reset pose for {gameObject.Name}.");
+        return reset;
 
     }
 
