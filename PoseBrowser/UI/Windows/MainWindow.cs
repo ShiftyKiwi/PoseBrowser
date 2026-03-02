@@ -22,6 +22,7 @@ namespace PoseBrowser.UI.Windows;
 internal class MainWindow : Window, IDisposable
 {
     private const string WindowId = "pose_browser_main_window_v2";
+    private static bool _diagnosticDrawLogged;
 
     private readonly ConfigurationService _configurationService;
     private readonly BrioService _brioService;
@@ -68,6 +69,7 @@ internal class MainWindow : Window, IDisposable
 
     public void Open(Vector2 position)
     {
+        _diagnosticDrawLogged = false;
         Position = position;
         PositionCondition = ImGuiCond.Always;
         if (!IsOpen)
@@ -179,26 +181,24 @@ internal class MainWindow : Window, IDisposable
         if (!IsOpen)
             return;
 
-        if (Position.HasValue)
-        {
-            ImGui.SetNextWindowPos(Position.Value, PositionCondition);
-        }
-
-        if (Size.HasValue)
-        {
-            ImGui.SetNextWindowSize(Size.Value, SizeCondition);
-        }
+        ImGui.SetNextWindowPos(new Vector2(120f, 120f), ImGuiCond.Always);
+        ImGui.SetNextWindowSize(new Vector2(520f, 260f), ImGuiCond.Always);
 
         var open = IsOpen;
-        if (!ImGui.Begin(WindowName, ref open, Flags))
+        var began = ImGui.Begin("PoseBrowser Diagnostic###pose_browser_diagnostic_window", ref open, ImGuiWindowFlags.NoCollapse);
+        IsOpen = open;
+
+        if (!_diagnosticDrawLogged)
         {
-            IsOpen = open;
-            ImGui.End();
-            return;
+            PoseBrowser.Log.Info($"Diagnostic window draw attempt. GPose={_clientStateService.IsGPosing}, began={began}, open={open}");
+            _diagnosticDrawLogged = true;
         }
 
-        IsOpen = open;
-        Draw();
+        if (began)
+        {
+            Draw();
+        }
+
         ImGui.End();
     }
 
@@ -210,20 +210,17 @@ internal class MainWindow : Window, IDisposable
         {
             if (!_clientStateService.IsGPosing)
             {
-                ImGui.TextWrapped("PoseBrowser can be opened anywhere, but pose preview and apply only work while you are in GPose.");
+                ImGui.TextWrapped("PoseBrowser diagnostic window.");
                 ImGui.Spacing();
-                ImGui.TextWrapped("Enter GPose, target a player, then browse or preview poses.");
+                ImGui.TextWrapped("Outside GPose.");
                 ImGui.Spacing();
-                if (ImGui.Button("Open Settings"))
-                {
-                    UIManager.Instance.ToggleSettingsWindow();
-                }
+                ImGui.Text($"Brio available: {_brioService.IsBrioAvailable}");
                 return;
             }
 
-            ImGui.TextWrapped("GPose test view active.");
+            ImGui.TextWrapped("PoseBrowser diagnostic window.");
             ImGui.Spacing();
-            ImGui.TextWrapped("If you can see this inside GPose, the main window is working and the problem is in the full browser UI path.");
+            ImGui.TextWrapped("GPose test view active.");
             ImGui.Spacing();
             ImGui.Text($"Brio available: {_brioService.IsBrioAvailable}");
             ImGui.Text($"Library count: {_configurationService.Configuration.Filesystem.BrowserLibraryPaths.Count}");
