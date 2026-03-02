@@ -73,14 +73,26 @@ internal class BrioService : IDisposable
             return false;
         }
 
-        // save current pose
-        var savingJson = ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
-        if(savingJson == null)
+        // Brio API 3 no longer guarantees this legacy IPC exists.
+        // Failing to snapshot the current pose should not block applying a new pose.
+        try
         {
-            PoseBrowser.Log.Warning($"Pose import failed: Brio did not return current pose JSON for target {gameObject.Name}.");
-            return false;
+            var savingJson = ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
+            if(!string.IsNullOrEmpty(savingJson))
+            {
+                LastPoseSaved = savingJson;
+            }
+            else
+            {
+                LastPoseSaved = null;
+                PoseBrowser.Log.Warning($"Brio did not return current pose JSON for target {gameObject.Name}. Apply will continue, but undo may be limited.");
+            }
         }
-        LastPoseSaved = savingJson;
+        catch(Exception ex)
+        {
+            LastPoseSaved = null;
+            PoseBrowser.Log.Warning(ex, $"Brio pose snapshot IPC is unavailable for target {gameObject.Name}. Apply will continue without saved undo state.");
+        }
 
         // apply pose
         var loaded = ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false;
@@ -139,6 +151,15 @@ internal class BrioService : IDisposable
         }
 
         if (_configurationService.Configuration.IPC.SaveAndResporePoseInsteadOfReset) {
+            if(LastPoseSaved == null)
+            {
+                PoseBrowser.Log.Warning("Undo requested, but no saved pose snapshot is available. Falling back to reset.");
+                var resetFallback = ActorPoseResetIPC?.InvokeFunc(gameObject, false) ?? false;
+                if(!resetFallback)
+                    PoseBrowser.Log.Warning($"Undo fallback failed: Brio could not reset pose for {gameObject.Name}.");
+                return resetFallback;
+            }
+
             var restored = ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, LastPoseSaved, false) ?? false;
             if(!restored)
                 PoseBrowser.Log.Warning($"Undo failed: Brio could not restore saved pose for {gameObject.Name}.");
