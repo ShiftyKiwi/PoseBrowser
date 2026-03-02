@@ -99,6 +99,7 @@ internal class UIManager : IDisposable
     public void ShowMainWindow()
     {
         _mainWindow.IsOpen = true;
+        _mainWindow.BringToFront();
         PoseBrowser.Log.Debug("PoseBrowser main window opened");
     }
 

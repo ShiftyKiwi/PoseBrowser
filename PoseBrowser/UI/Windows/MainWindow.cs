@@ -160,39 +160,41 @@ internal class MainWindow : Window, IDisposable
     // Draw window
     public override void Draw()
     {
-        if (!_clientStateService.IsGPosing)
-        {
-            ImGui.TextWrapped("PoseBrowser can be opened anywhere, but pose preview and apply only work while you are in GPose.");
-            ImGui.Spacing();
-            ImGui.TextWrapped("Enter GPose, target a player, then browse or preview poses.");
-            ImGui.Spacing();
-            if (ImGui.Button("Open Settings"))
-            {
-                UIManager.Instance.ToggleSettingsWindow();
-            }
-            return;
-        }
-
-        // PoseBrowser.Log.Debug($"UserPreviewingPoseHovered: {UserPreviewingPoseHovered_previous} => {UserPreviewingPoseHovered}");
-        if (UserPreviewingPoseHovered_previous != UserPreviewingPoseHovered && !UserPreviewingPoseHovered)
-            KeyUpPreviewPoseHovered();
-        UserPreviewingPoseHovered_previous = UserPreviewingPoseHovered;
-
-        DrawImageModal();
-
-        var files = BrowserPoseFiles;
-        if (!string.IsNullOrWhiteSpace(Search))
-            files = files.Where(f => f.Path.Contains(Search, StringComparison.OrdinalIgnoreCase)).ToList();
-
-
-        DrawToolBar(files.Count);
-        ImGui.Spacing();
-
-        ImGui.BeginChild("PoseBrowserFileGrid", ImGui.GetContentRegionAvail());
-        bool anyHovered = false;
-        int col = 1;
+        var childOpen = false;
         try
         {
+            if (!_clientStateService.IsGPosing)
+            {
+                ImGui.TextWrapped("PoseBrowser can be opened anywhere, but pose preview and apply only work while you are in GPose.");
+                ImGui.Spacing();
+                ImGui.TextWrapped("Enter GPose, target a player, then browse or preview poses.");
+                ImGui.Spacing();
+                if (ImGui.Button("Open Settings"))
+                {
+                    UIManager.Instance.ToggleSettingsWindow();
+                }
+                return;
+            }
+
+            // PoseBrowser.Log.Debug($"UserPreviewingPoseHovered: {UserPreviewingPoseHovered_previous} => {UserPreviewingPoseHovered}");
+            if (UserPreviewingPoseHovered_previous != UserPreviewingPoseHovered && !UserPreviewingPoseHovered)
+                KeyUpPreviewPoseHovered();
+            UserPreviewingPoseHovered_previous = UserPreviewingPoseHovered;
+
+            DrawImageModal();
+
+            var files = BrowserPoseFiles;
+            if (!string.IsNullOrWhiteSpace(Search))
+                files = files.Where(f => f.Path.Contains(Search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+
+            DrawToolBar(files.Count);
+            ImGui.Spacing();
+
+            ImGui.BeginChild("PoseBrowserFileGrid", ImGui.GetContentRegionAvail());
+            childOpen = true;
+            bool anyHovered = false;
+            int col = 1;
             foreach (var file in files)
             {
 
@@ -328,9 +330,16 @@ internal class MainWindow : Window, IDisposable
         }
         catch (Exception e)
         {
-            PoseBrowser.Log.Debug(e,"Suppressed error during file loop");
+            PoseBrowser.Log.Error(e, "PoseBrowser main window draw failed");
+            ImGui.TextWrapped("PoseBrowser hit a UI error while drawing. Check plugin logs for details.");
         }
-        ImGui.EndChild();
+        finally
+        {
+            if (childOpen)
+            {
+                ImGui.EndChild();
+            }
+        }
 
         // ImGui.End();
     }
