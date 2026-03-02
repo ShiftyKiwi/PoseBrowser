@@ -2,7 +2,7 @@
 <Project Sdk="Dalamud.NET.Sdk/14.0.1">
 
   <PropertyGroup>
-    <Version>0.0.0.24</Version>
+    <Version>0.0.0.25</Version>
     <Description>A pose browser to work with Brio</Description>
     <Authors>Shifty Kiwi</Authors>
     <PackageProjectUrl>https://github.com/ShiftyKiwi/PoseBrowser</PackageProjectUrl>

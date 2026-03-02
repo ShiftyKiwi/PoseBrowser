@@ -147,7 +147,7 @@ internal class MainWindow : Window, IDisposable
 
     public override bool DrawConditions()
     {
-        return _clientStateService.IsGPosing;
+        return true;
     }
 
     public override void OnOpen()
@@ -160,18 +160,18 @@ internal class MainWindow : Window, IDisposable
     // Draw window
     public override void Draw()
     {
-
-        // todo: check if in gpose
         if (!_clientStateService.IsGPosing)
+        {
+            ImGui.TextWrapped("PoseBrowser can be opened anywhere, but pose preview and apply only work while you are in GPose.");
+            ImGui.Spacing();
+            ImGui.TextWrapped("Enter GPose, target a player, then browse or preview poses.");
+            ImGui.Spacing();
+            if (ImGui.Button("Open Settings"))
+            {
+                UIManager.Instance.ToggleSettingsWindow();
+            }
             return;
-
-
-        // if (!ImGui.Begin("Pose Browser", ref Visible)) {
-        // 	ImGui.End();
-        // 	//if (BrowserPoseFiles.Any())
-        // 	//	ClearImageCache();
-        // 	return;
-        // }
+        }
 
         // PoseBrowser.Log.Debug($"UserPreviewingPoseHovered: {UserPreviewingPoseHovered_previous} => {UserPreviewingPoseHovered}");
         if (UserPreviewingPoseHovered_previous != UserPreviewingPoseHovered && !UserPreviewingPoseHovered)
