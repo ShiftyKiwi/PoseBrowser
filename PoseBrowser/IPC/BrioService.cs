@@ -81,12 +81,13 @@ internal class BrioService : IDisposable
 
         // Brio API 3 no longer guarantees this legacy IPC exists.
         // Failing to snapshot the current pose should not block applying a new pose.
+        string? currentPoseJson = null;
         try
         {
-            var savingJson = InvokePoseGetAsJson(gameObject);
-            if(!string.IsNullOrEmpty(savingJson))
+            currentPoseJson = InvokePoseGetAsJson(gameObject);
+            if(!string.IsNullOrEmpty(currentPoseJson))
             {
-                LastPoseSaved = savingJson;
+                LastPoseSaved = currentPoseJson;
             }
             else
             {
@@ -107,7 +108,7 @@ internal class BrioService : IDisposable
         }
         else
         {
-            loaded = ImportFilteredPoseTarget(gameObject, path, includeBody, includeFace);
+            loaded = ImportFilteredPoseTarget(gameObject, path, includeBody, includeFace, currentPoseJson);
         }
 
         if(!loaded)
@@ -122,7 +123,7 @@ internal class BrioService : IDisposable
         return loaded;
     }
 
-    private bool ImportFilteredPoseTarget(IGameObject gameObject, string path, bool includeBody, bool includeFace)
+    private bool ImportFilteredPoseTarget(IGameObject gameObject, string path, bool includeBody, bool includeFace, string? currentPoseJson)
     {
         if (!includeBody && !includeFace)
         {
@@ -133,7 +134,7 @@ internal class BrioService : IDisposable
         try
         {
             var json = File.ReadAllText(path);
-            var filteredJson = FilterPoseJson(json, includeBody, includeFace);
+            var filteredJson = FilterPoseJson(json, includeBody, includeFace, currentPoseJson);
             if (filteredJson == null)
             {
                 PoseBrowser.Log.Warning($"Pose import failed: could not filter pose file '{path}'.");
@@ -150,7 +151,7 @@ internal class BrioService : IDisposable
         }
     }
 
-    private static string? FilterPoseJson(string json, bool includeBody, bool includeFace)
+    private static string? FilterPoseJson(string json, bool includeBody, bool includeFace, string? currentPoseJson)
     {
         JsonNode? root;
         try
@@ -165,12 +166,35 @@ internal class BrioService : IDisposable
         if (root is not JsonObject rootObject)
             return null;
 
-        if (!includeBody && rootObject.ContainsKey("Position"))
-            rootObject.Remove("Position");
-        if (!includeBody && rootObject.ContainsKey("Rotation"))
-            rootObject.Remove("Rotation");
-        if (!includeBody && rootObject.ContainsKey("Scale"))
-            rootObject.Remove("Scale");
+        JsonObject? currentRootObject = null;
+        JsonObject? currentBones = null;
+        if (!string.IsNullOrWhiteSpace(currentPoseJson))
+        {
+            try
+            {
+                currentRootObject = JsonNode.Parse(currentPoseJson) as JsonObject;
+                currentBones = currentRootObject?["Bones"] as JsonObject;
+            }
+            catch
+            {
+                currentRootObject = null;
+                currentBones = null;
+            }
+        }
+
+        if (!includeBody)
+        {
+            if (currentRootObject != null)
+            {
+                CopyRootTransform(rootObject, currentRootObject);
+            }
+            else
+            {
+                rootObject.Remove("Position");
+                rootObject.Remove("Rotation");
+                rootObject.Remove("Scale");
+            }
+        }
 
         if (rootObject["Bones"] is JsonObject bones)
         {
@@ -185,12 +209,54 @@ internal class BrioService : IDisposable
 
                 if (includeFace && !includeBody && FaceAnchorBoneNames.Contains(boneName, StringComparer.OrdinalIgnoreCase) && bones[boneName] is JsonObject anchorBone)
                 {
-                    anchorBone.Remove("Position");
+                    if (currentBones?[boneName] is JsonObject currentAnchorBone)
+                    {
+                        CopyBoneProperty(anchorBone, currentAnchorBone, "Position");
+                    }
+                    else
+                    {
+                        anchorBone.Remove("Position");
+                    }
+                }
+            }
+
+            if (includeFace && !includeBody && currentBones != null)
+            {
+                foreach (var anchorBoneName in FaceAnchorBoneNames)
+                {
+                    if (bones[anchorBoneName] is not JsonObject sourceAnchorBone || currentBones[anchorBoneName] is not JsonObject currentAnchorBone)
+                        continue;
+
+                    CopyBoneProperty(sourceAnchorBone, currentAnchorBone, "Position");
                 }
             }
         }
 
         return rootObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static void CopyRootTransform(JsonObject destination, JsonObject source)
+    {
+        CopyObjectProperty(destination, source, "Position");
+        CopyObjectProperty(destination, source, "Rotation");
+        CopyObjectProperty(destination, source, "Scale");
+    }
+
+    private static void CopyBoneProperty(JsonObject destinationBone, JsonObject sourceBone, string propertyName)
+    {
+        CopyObjectProperty(destinationBone, sourceBone, propertyName);
+    }
+
+    private static void CopyObjectProperty(JsonObject destination, JsonObject source, string propertyName)
+    {
+        if (source[propertyName] != null)
+        {
+            destination[propertyName] = source[propertyName]!.DeepClone();
+        }
+        else
+        {
+            destination.Remove(propertyName);
+        }
     }
 
     private static bool IsFaceBone(string boneName)
