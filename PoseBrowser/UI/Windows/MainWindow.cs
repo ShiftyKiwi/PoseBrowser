@@ -160,7 +160,6 @@ internal class MainWindow : Window, IDisposable
     // Draw window
     public override void Draw()
     {
-        var childOpen = false;
         try
         {
             if (!_clientStateService.IsGPosing)
@@ -176,169 +175,23 @@ internal class MainWindow : Window, IDisposable
                 return;
             }
 
-            // PoseBrowser.Log.Debug($"UserPreviewingPoseHovered: {UserPreviewingPoseHovered_previous} => {UserPreviewingPoseHovered}");
-            if (UserPreviewingPoseHovered_previous != UserPreviewingPoseHovered && !UserPreviewingPoseHovered)
-                KeyUpPreviewPoseHovered();
-            UserPreviewingPoseHovered_previous = UserPreviewingPoseHovered;
-
-            DrawImageModal();
-
-            var files = BrowserPoseFiles;
-            if (!string.IsNullOrWhiteSpace(Search))
-                files = files.Where(f => f.Path.Contains(Search, StringComparison.OrdinalIgnoreCase)).ToList();
-
-
-            DrawToolBar(files.Count);
+            ImGui.TextWrapped("GPose test view active.");
             ImGui.Spacing();
-
-            ImGui.BeginChild("PoseBrowserFileGrid", ImGui.GetContentRegionAvail());
-            childOpen = true;
-            bool anyHovered = false;
-            int col = 1;
-            foreach (var file in files)
+            ImGui.TextWrapped("If you can see this inside GPose, the main window is working and the problem is in the full browser UI path.");
+            ImGui.Spacing();
+            ImGui.Text($"Brio available: {_brioService.IsBrioAvailable}");
+            ImGui.Text($"Library count: {_configurationService.Configuration.Filesystem.BrowserLibraryPaths.Count}");
+            ImGui.Text($"Pose cache count: {BrowserPoseFiles.Count}");
+            ImGui.Spacing();
+            if (ImGui.Button("Run Sync"))
             {
-
-                if (FilterImagesOnly && file.ImagePath == null) continue;
-
-                var ishovering = FileInFocus == file;
-                float borderSize = ImGui.GetStyle().FramePadding.X;
-                ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, borderSize);
-
-                var imageTex = _configurationService.Configuration.Appearance.BrowserEnableImages &&
-                               file.ImagePath != null
-                                   ? _textureProvidereService.GetFromFile(file.ImagePath)
-                                   : null;
-
-                if (imageTex != null)
-                {
-                    ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
-                    ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(borderSize));
-                    var textureWrap = imageTex.GetWrapOrEmpty();
-
-                    if (CropImages)
-                    {
-                        (var uv0, var uv1) = CropRatioImage(textureWrap);
-                        ImGui.ImageButton(textureWrap.Handle, ThumbSize2D, uv0, uv1);
-                    }
-                    else
-                        ImGui.ImageButton(textureWrap.Handle, ScaleThumbImage(textureWrap));
-
-                    ImGui.PopStyleVar();
-                    ImGui.PopStyleColor();
-                }
-                else
-                {
-                    ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, borderSize);
-                    ImGui.PushStyleColor(ImGuiCol.Border,
-                                         ImGui.GetStyle()
-                                              .Colors[
-                                                  ishovering ? (int)ImGuiCol.ButtonHovered : (int)ImGuiCol.WindowBg]);
-                    ;
-                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
-                    ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
-
-                    ImGui.Button($"{file.Name}##ContextMenu##{file.Path}", ThumbSize2D + (new Vector2(borderSize * 2)));
-
-                    ImGui.PopStyleColor(3);
-                    ImGui.PopStyleVar();
-                }
-
-                //ImGui.PopStyleColor();
-                ImGui.PopStyleVar(1);
-
-                file.IsVisible = ImGui.IsItemVisible();
-
-                if (ImGui.IsItemHovered())
-                {
-                    FileInFocus = file;
-                    anyHovered |= true;
-                }
-
-                var fileExt = Path.GetExtension(file.Path);
-                string fileType;
-                if (fileExt == ".pose")
-                    fileType = "Anamnesis pose";
-                else if (fileExt == ".cmp")
-                    fileType = "Concept Matrix pose";
-                else
-                    fileType = "Unknown file type";
-
-                if (ImGui.BeginPopupContextItem($"PoseBrowser##ContextMenu##{file.Path}",
-                                                ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.AnyPopupId))
-                {
-                    ImGui.Text(file.Name);
-                    ImGui.Separator();
-                    ImGui.Text(fileType);
-
-                    if (ImGui.Selectable($"{ShortPath.Replace(file.Path, "").TrimStart(new char[] { '\\', '/' })}"))
-                        ImGui.SetClipboardText(Path.GetDirectoryName(file.Path));
-
-                    if (imageTex != null)
-                        ImGui.Text($"Image Size: {imageTex.GetWrapOrEmpty().Width}*{imageTex.GetWrapOrEmpty().Height}");
-
-
-                    if (ImGui.Selectable($"Apply to target"))
-                        ImportPose(file.Path,
-                                   ImportPoseFlags.SaveTempAfter | ImportPoseFlags.ResetPreview | ImportPoseFlags.Face |
-                                   ImportPoseFlags.Body);
-                    if (ImGui.Selectable($"Apply body to target"))
-                        ImportPose(file.Path,
-                                   ImportPoseFlags.SaveTempAfter | ImportPoseFlags.ResetPreview | ImportPoseFlags.Body);
-                    if (ImGui.Selectable($"Apply expression to target"))
-                        ImportPose(file.Path,
-                                   ImportPoseFlags.SaveTempAfter | ImportPoseFlags.ResetPreview | ImportPoseFlags.Face);
-
-                    ImGui.EndPopup();
-                }
-
-                if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
-                {
-                    var imageFilesPaths = FindExtraImages(file);
-                    if (imageFilesPaths != null)
-                    {
-                        DisplayImages = imageFilesPaths.Select((ifp, k) => new { ifp, k })
-                                                       .ToDictionary(x => x.k, x => x.ifp);
-                        PoseBrowser.Log.Debug(
-                            $"Found {DisplayImages.Count} images:\n{string.Join("\n", DisplayImages)}");
-                    }
-
-                }
-
-                // TODO: display discreet name in the image instead of tooltip
-
-                // Restore the cursor to the same line to be able to calculate available region
-                if (Columns == 0 || col < Columns)
-                {
-                    col++;
-                    ImGui.SameLine();
-                }
-                else
-                    col = 1;
-
-                if (Columns == 0 && ImGui.GetContentRegionAvail().X < ThumbSize2D.X)
-                    ImGui.Text(""); // Newline() seems buggy, so wrap with Text's natural line break
+                Sync();
             }
-
-
-            if (!anyHovered)
-                FileInFocus = null;
-
-            if (FileInFocus != FileInPreview && FileInPreview != null)
-                RestoreTempPose();
-            if (IsHolding && FileInFocus != null && FileInPreview == null)
-                PressPreview();
         }
         catch (Exception e)
         {
             PoseBrowser.Log.Error(e, "PoseBrowser main window draw failed");
             ImGui.TextWrapped("PoseBrowser hit a UI error while drawing. Check plugin logs for details.");
-        }
-        finally
-        {
-            if (childOpen)
-            {
-                ImGui.EndChild();
-            }
         }
 
         // ImGui.End();
