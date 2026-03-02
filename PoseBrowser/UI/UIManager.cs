@@ -2,6 +2,7 @@
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Windowing;
+using Dalamud.Game.Command;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Bindings.ImGui;
@@ -15,8 +16,12 @@ namespace PoseBrowser.UI;
 
 internal class UIManager : IDisposable
 {
+    private const string MainCommand = "/posebrowser";
+    private const string AliasCommand = "/pb";
+
     private readonly IDalamudPluginInterface _pluginInterface;
     private readonly ConfigurationService _configurationService;
+    private readonly ICommandManager _commandManager;
 
     private readonly MainWindow _mainWindow;
     private readonly SettingsWindow _settingsWindow;
@@ -42,6 +47,7 @@ internal class UIManager : IDisposable
         (
             IDalamudPluginInterface pluginInterface,
             ConfigurationService configurationService,
+            ICommandManager commandManager,
             IFramework framework,
             ITextureProvider textureProvider,
             MainWindow mainWindow,
@@ -53,6 +59,7 @@ internal class UIManager : IDisposable
 
         _pluginInterface = pluginInterface;
         _configurationService = configurationService;
+        _commandManager = commandManager;
         _textureProvider = textureProvider;
 
         _mainWindow = mainWindow;
@@ -71,6 +78,13 @@ internal class UIManager : IDisposable
         _pluginInterface.UiBuilder.OpenConfigUi += ShowSettingsWindow;
         _pluginInterface.UiBuilder.OpenMainUi += ShowMainWindow;
         _pluginInterface.ActivePluginsChanged += ActivePluginsChanged;
+        var openCommandInfo = new CommandInfo(OnMainCommand)
+        {
+            HelpMessage = "Open the PoseBrowser main window.",
+            ShowInHelp = true
+        };
+        _commandManager.AddHandler(MainCommand, openCommandInfo);
+        _commandManager.AddHandler(AliasCommand, openCommandInfo);
 
         ApplySettings();
     }
@@ -85,6 +99,12 @@ internal class UIManager : IDisposable
     public void ShowMainWindow()
     {
         _mainWindow.IsOpen = true;
+        PoseBrowser.Log.Debug("PoseBrowser main window opened");
+    }
+
+    private void OnMainCommand(string command, string arguments)
+    {
+        ShowMainWindow();
     }
 
     private void ActivePluginsChanged(IActivePluginsChangedEventArgs args)
@@ -144,6 +164,8 @@ internal class UIManager : IDisposable
         _pluginInterface.UiBuilder.Draw -= DrawUI;
         _pluginInterface.UiBuilder.OpenConfigUi -= ShowSettingsWindow;
         _pluginInterface.UiBuilder.OpenMainUi -= ShowMainWindow;
+        _commandManager.RemoveHandler(MainCommand);
+        _commandManager.RemoveHandler(AliasCommand);
 
         _mainWindow.Dispose();
 

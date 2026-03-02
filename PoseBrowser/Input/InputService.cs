@@ -75,12 +75,14 @@ internal class InputService
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        if(_clientState.IsGPosing && _configService.Configuration.Input.EnableKeybinds)
+        if(!_configService.Configuration.Input.EnableKeybinds)
+            return;
+
+        CheckEvent(KeyBindEvents.Interface_TogglePoseBrowserWindow);
+
+        if(_clientState.IsGPosing)
         {
-            foreach(var evt in Enum.GetValues<KeyBindEvents>())
-            {
-                this.CheckEvent(evt);
-            }
+            CheckEvent(KeyBindEvents.Posing_PreviewHovering);
         }
     }
 
