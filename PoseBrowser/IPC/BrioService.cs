@@ -26,15 +26,23 @@ internal class BrioService : IDisposable
 
     public const string ActorPoseLoadFromFileIPCName = "Brio.Actor.Pose.LoadFromFile";
     private readonly ICallGateSubscriber<IGameObject, string, bool>? ActorPoseLoadFromFileIPC;
+    public const string PoseLoadFromFileApi3IPCName = "Brio.API.LoadPoseFromFile";
+    private readonly ICallGateSubscriber<IGameObject, string, bool>? PoseLoadFromFileApi3IPC;
 
     public const string ActorPoseGetAsJsonIPCName = "Brio.Actor.Pose.GetPoseAsJson";
     private readonly ICallGateSubscriber<IGameObject, string?>? ActorPoseGetFromJsonIPC;
+    public const string PoseGetAsJsonApi3IPCName = "Brio.API.GetPoseAsJson";
+    private readonly ICallGateSubscriber<IGameObject, string?>? PoseGetAsJsonApi3IPC;
 
     public const string ActorPoseLoadFromJsonIPCName = "Brio.Actor.Pose.LoadFromJson";
     private readonly ICallGateSubscriber<IGameObject, string, bool, bool>? ActorPoseLoadFromJsonIPC;
+    public const string PoseLoadFromJsonApi3IPCName = "Brio.API.LoadPoseFromJson";
+    private readonly ICallGateSubscriber<IGameObject, string, bool, bool>? PoseLoadFromJsonApi3IPC;
 
     public const string ActorPoseResetIPCName = "Brio.Actor.Pose.Reset";
     private readonly ICallGateSubscriber<IGameObject, bool, bool>? ActorPoseResetIPC;
+    public const string PoseResetApi3IPCName = "Brio.API.ResetPose";
+    private readonly ICallGateSubscriber<IGameObject, bool, bool>? PoseResetApi3IPC;
 
     public BrioService(IDalamudPluginInterface pluginInterface, ConfigurationService configurationService, ITargetManager targetManager)
     {
@@ -44,9 +52,13 @@ internal class BrioService : IDisposable
 
         ApiVersionIpc = pluginInterface.GetIpcSubscriber<(int,int)>(ApiVersionIpcName);
         ActorPoseLoadFromFileIPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool>(ActorPoseLoadFromFileIPCName);
+        PoseLoadFromFileApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool>(PoseLoadFromFileApi3IPCName);
         ActorPoseGetFromJsonIPC = pluginInterface.GetIpcSubscriber<IGameObject, string?>(ActorPoseGetAsJsonIPCName);
+        PoseGetAsJsonApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, string?>(PoseGetAsJsonApi3IPCName);
         ActorPoseLoadFromJsonIPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool, bool>(ActorPoseLoadFromJsonIPCName);
+        PoseLoadFromJsonApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool, bool>(PoseLoadFromJsonApi3IPCName);
         ActorPoseResetIPC = pluginInterface.GetIpcSubscriber<IGameObject, bool, bool>(ActorPoseResetIPCName);
+        PoseResetApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, bool, bool>(PoseResetApi3IPCName);
         RefreshBrioStatus();
 
         _configurationService.OnConfigurationChanged += RefreshBrioStatus;
@@ -77,7 +89,7 @@ internal class BrioService : IDisposable
         // Failing to snapshot the current pose should not block applying a new pose.
         try
         {
-            var savingJson = ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
+            var savingJson = InvokePoseGetAsJson(gameObject);
             if(!string.IsNullOrEmpty(savingJson))
             {
                 LastPoseSaved = savingJson;
@@ -95,7 +107,7 @@ internal class BrioService : IDisposable
         }
 
         // apply pose
-        var loaded = ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false;
+        var loaded = InvokePoseLoadFromFile(gameObject, path);
         if(!loaded)
         {
             PoseBrowser.Log.Warning($"Pose import failed: Brio rejected file '{path}' for target {gameObject.Name}.");
@@ -154,18 +166,18 @@ internal class BrioService : IDisposable
             if(LastPoseSaved == null)
             {
                 PoseBrowser.Log.Warning("Undo requested, but no saved pose snapshot is available. Falling back to reset.");
-                var resetFallback = ActorPoseResetIPC?.InvokeFunc(gameObject, false) ?? false;
+                var resetFallback = InvokePoseReset(gameObject, false);
                 if(!resetFallback)
                     PoseBrowser.Log.Warning($"Undo fallback failed: Brio could not reset pose for {gameObject.Name}.");
                 return resetFallback;
             }
 
-            var restored = ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, LastPoseSaved, false) ?? false;
+            var restored = InvokePoseLoadFromJson(gameObject, LastPoseSaved, false);
             if(!restored)
                 PoseBrowser.Log.Warning($"Undo failed: Brio could not restore saved pose for {gameObject.Name}.");
             return restored;
         }
-        var reset = ActorPoseResetIPC?.InvokeFunc(gameObject, false) ?? false;
+        var reset = InvokePoseReset(gameObject, false);
         if(!reset)
             PoseBrowser.Log.Warning($"Undo failed: Brio could not reset pose for {gameObject.Name}.");
         return reset;
@@ -226,6 +238,56 @@ internal class BrioService : IDisposable
     public void Dispose()
     {
         _configurationService.OnConfigurationChanged -= RefreshBrioStatus;
+    }
+
+    private string? InvokePoseGetAsJson(IGameObject gameObject)
+    {
+        try
+        {
+            return PoseGetAsJsonApi3IPC?.InvokeFunc(gameObject) ?? ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
+        }
+        catch
+        {
+            return ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
+        }
+    }
+
+    private bool InvokePoseLoadFromFile(IGameObject gameObject, string path)
+    {
+        try
+        {
+            return PoseLoadFromFileApi3IPC?.InvokeFunc(gameObject, path) ?? ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false;
+        }
+        catch
+        {
+            return ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false;
+        }
+    }
+
+    private bool InvokePoseLoadFromJson(IGameObject gameObject, string json, bool isLegacyCmToolPose)
+    {
+        try
+        {
+            return PoseLoadFromJsonApi3IPC?.InvokeFunc(gameObject, json, isLegacyCmToolPose)
+                   ?? ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, json, isLegacyCmToolPose)
+                   ?? false;
+        }
+        catch
+        {
+            return ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, json, isLegacyCmToolPose) ?? false;
+        }
+    }
+
+    private bool InvokePoseReset(IGameObject gameObject, bool clearHistory)
+    {
+        try
+        {
+            return PoseResetApi3IPC?.InvokeFunc(gameObject, clearHistory) ?? ActorPoseResetIPC?.InvokeFunc(gameObject, clearHistory) ?? false;
+        }
+        catch
+        {
+            return ActorPoseResetIPC?.InvokeFunc(gameObject, clearHistory) ?? false;
+        }
     }
 
 
