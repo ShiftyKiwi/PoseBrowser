@@ -229,10 +229,17 @@ internal class BrioService : IDisposable
 
         foreach (var (boneName, boneNode) in sourceBones)
         {
-            if (boneNode == null || !IsFaceBone(boneName))
+            if (boneNode is not JsonObject sourceBone || !IsFaceBone(boneName))
                 continue;
 
-            mergedBones[boneName] = boneNode.DeepClone();
+            if (mergedBones[boneName] is not JsonObject targetBone)
+            {
+                mergedBones[boneName] = boneNode.DeepClone();
+                continue;
+            }
+
+            CopyBoneProperty(targetBone, sourceBone, "Rotation");
+            CopyBoneProperty(targetBone, sourceBone, "Scale");
         }
 
         return mergedRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
