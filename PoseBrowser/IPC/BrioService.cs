@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
@@ -26,23 +28,15 @@ internal class BrioService : IDisposable
 
     public const string ActorPoseLoadFromFileIPCName = "Brio.Actor.Pose.LoadFromFile";
     private readonly ICallGateSubscriber<IGameObject, string, bool>? ActorPoseLoadFromFileIPC;
-    public const string PoseLoadFromFileApi3IPCName = "Brio.API.LoadPoseFromFile";
-    private readonly ICallGateSubscriber<IGameObject, string, bool>? PoseLoadFromFileApi3IPC;
 
     public const string ActorPoseGetAsJsonIPCName = "Brio.Actor.Pose.GetPoseAsJson";
     private readonly ICallGateSubscriber<IGameObject, string?>? ActorPoseGetFromJsonIPC;
-    public const string PoseGetAsJsonApi3IPCName = "Brio.API.GetPoseAsJson";
-    private readonly ICallGateSubscriber<IGameObject, string?>? PoseGetAsJsonApi3IPC;
 
     public const string ActorPoseLoadFromJsonIPCName = "Brio.Actor.Pose.LoadFromJson";
     private readonly ICallGateSubscriber<IGameObject, string, bool, bool>? ActorPoseLoadFromJsonIPC;
-    public const string PoseLoadFromJsonApi3IPCName = "Brio.API.LoadPoseFromJson";
-    private readonly ICallGateSubscriber<IGameObject, string, bool, bool>? PoseLoadFromJsonApi3IPC;
 
     public const string ActorPoseResetIPCName = "Brio.Actor.Pose.Reset";
     private readonly ICallGateSubscriber<IGameObject, bool, bool>? ActorPoseResetIPC;
-    public const string PoseResetApi3IPCName = "Brio.API.ResetPose";
-    private readonly ICallGateSubscriber<IGameObject, bool, bool>? PoseResetApi3IPC;
 
     public BrioService(IDalamudPluginInterface pluginInterface, ConfigurationService configurationService, ITargetManager targetManager)
     {
@@ -52,13 +46,9 @@ internal class BrioService : IDisposable
 
         ApiVersionIpc = pluginInterface.GetIpcSubscriber<(int,int)>(ApiVersionIpcName);
         ActorPoseLoadFromFileIPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool>(ActorPoseLoadFromFileIPCName);
-        PoseLoadFromFileApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool>(PoseLoadFromFileApi3IPCName);
         ActorPoseGetFromJsonIPC = pluginInterface.GetIpcSubscriber<IGameObject, string?>(ActorPoseGetAsJsonIPCName);
-        PoseGetAsJsonApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, string?>(PoseGetAsJsonApi3IPCName);
         ActorPoseLoadFromJsonIPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool, bool>(ActorPoseLoadFromJsonIPCName);
-        PoseLoadFromJsonApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, string, bool, bool>(PoseLoadFromJsonApi3IPCName);
         ActorPoseResetIPC = pluginInterface.GetIpcSubscriber<IGameObject, bool, bool>(ActorPoseResetIPCName);
-        PoseResetApi3IPC = pluginInterface.GetIpcSubscriber<IGameObject, bool, bool>(PoseResetApi3IPCName);
         RefreshBrioStatus();
 
         _configurationService.OnConfigurationChanged += RefreshBrioStatus;
@@ -244,7 +234,8 @@ internal class BrioService : IDisposable
     {
         try
         {
-            return PoseGetAsJsonApi3IPC?.InvokeFunc(gameObject) ?? ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
+            var apiResult = InvokeBrioApi<string?>("Brio.API.GetPoseAsJson", "Invoke", gameObject);
+            return apiResult.invoked ? apiResult.result : ActorPoseGetFromJsonIPC?.InvokeFunc(gameObject);
         }
         catch
         {
@@ -256,7 +247,8 @@ internal class BrioService : IDisposable
     {
         try
         {
-            return PoseLoadFromFileApi3IPC?.InvokeFunc(gameObject, path) ?? ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false;
+            var apiResult = InvokeBrioApi<bool>("Brio.API.LoadPoseFromFile", "Invoke", gameObject, path);
+            return apiResult.invoked ? apiResult.result : (ActorPoseLoadFromFileIPC?.InvokeFunc(gameObject, path) ?? false);
         }
         catch
         {
@@ -268,9 +260,10 @@ internal class BrioService : IDisposable
     {
         try
         {
-            return PoseLoadFromJsonApi3IPC?.InvokeFunc(gameObject, json, isLegacyCmToolPose)
-                   ?? ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, json, isLegacyCmToolPose)
-                   ?? false;
+            var apiResult = InvokeBrioApi<bool>("Brio.API.LoadPoseFromJson", "Invoke", gameObject, json, isLegacyCmToolPose);
+            return apiResult.invoked
+                ? apiResult.result
+                : (ActorPoseLoadFromJsonIPC?.InvokeFunc(gameObject, json, isLegacyCmToolPose) ?? false);
         }
         catch
         {
@@ -282,12 +275,63 @@ internal class BrioService : IDisposable
     {
         try
         {
-            return PoseResetApi3IPC?.InvokeFunc(gameObject, clearHistory) ?? ActorPoseResetIPC?.InvokeFunc(gameObject, clearHistory) ?? false;
+            var apiResult = InvokeBrioApi<bool>("Brio.API.ResetPose", "Invoke", gameObject, clearHistory);
+            return apiResult.invoked ? apiResult.result : (ActorPoseResetIPC?.InvokeFunc(gameObject, clearHistory) ?? false);
         }
         catch
         {
             return ActorPoseResetIPC?.InvokeFunc(gameObject, clearHistory) ?? false;
         }
+    }
+
+    private (bool invoked, T result) InvokeBrioApi<T>(string typeName, string methodName, params object[] args)
+    {
+        try
+        {
+            var assembly = ResolveBrioApiAssembly();
+            if(assembly == null)
+                return (false, default!);
+
+            var type = assembly.GetType(typeName);
+            if(type == null)
+                return (false, default!);
+
+            var instance = Activator.CreateInstance(type, _pluginInterface);
+            var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
+            if(instance == null || method == null)
+                return (false, default!);
+
+            var value = method.Invoke(instance, args);
+            return value is T typed ? (true, typed) : (true, default!);
+        }
+        catch(Exception ex)
+        {
+            PoseBrowser.Log.Debug(ex, $"Failed reflective Brio API call {typeName}.{methodName}");
+            return (false, default!);
+        }
+    }
+
+    private static Assembly? ResolveBrioApiAssembly()
+    {
+        var loadedAssembly = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(a => string.Equals(a.GetName().Name, "Brio.API", StringComparison.OrdinalIgnoreCase));
+        if(loadedAssembly != null)
+            return loadedAssembly;
+
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var brioPluginDir = Path.Combine(appData, "XIVLauncher", "installedPlugins", "Brio");
+        if(!Directory.Exists(brioPluginDir))
+            return null;
+
+        var latestBrioDir = new DirectoryInfo(brioPluginDir)
+            .EnumerateDirectories()
+            .OrderByDescending(dir => dir.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if(latestBrioDir == null)
+            return null;
+
+        var apiPath = Path.Combine(latestBrioDir.FullName, "Brio.API.dll");
+        return File.Exists(apiPath) ? Assembly.LoadFrom(apiPath) : null;
     }
 
 
