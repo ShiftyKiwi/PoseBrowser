@@ -18,7 +18,7 @@ internal class BrioService : IDisposable
 {
     private const int MinimumSupportedBrioApiMajor = 2;
     private static readonly string[] FaceBonePrefixes = ["j_f_"];
-    private static readonly string[] FaceAnchorBoneNames = ["j_kao", "j_ago"];
+    private static readonly string[] FaceAnchorBoneNames = ["j_ago"];
 
     public bool IsBrioAvailable { get; private set; } = false;
     public (int Major, int Minor) LastDetectedApiVersion { get; private set; } = default;
