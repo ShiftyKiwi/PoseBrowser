@@ -70,7 +70,6 @@ internal class UIManager : IDisposable
         _brioService = brioService;
 
         _windowSystem = new(PoseBrowser.Name);
-        _windowSystem.AddWindow(_mainWindow);
         _windowSystem.AddWindow(_settingsWindow);
 
         _configurationService.OnConfigurationChanged += ApplySettings;
@@ -99,10 +98,7 @@ internal class UIManager : IDisposable
 
     public void ShowMainWindow()
     {
-        _mainWindow.Position = new Vector2(120f, 120f);
-        _mainWindow.PositionCondition = ImGuiCond.Always;
-        _mainWindow.IsOpen = true;
-        _mainWindow.BringToFront();
+        _mainWindow.Open(new Vector2(120f, 120f));
         PoseBrowser.Log.Info("PoseBrowser main window opened at forced position");
     }
 
@@ -132,6 +128,7 @@ internal class UIManager : IDisposable
     {
         try
         {
+            _mainWindow.DrawStandalone();
             _windowSystem.Draw();
             FileDialogManager.Draw();
         }

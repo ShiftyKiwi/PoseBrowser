@@ -65,6 +65,17 @@ internal class MainWindow : Window, IDisposable
         _inputService.RemoveListener(KeyBindEvents.Interface_TogglePoseBrowserWindow, this.OnMainWindowToggle);
         _inputService.RemoveListener(KeyBindEvents.Posing_PreviewHovering, this.KeyDownPreviewPoseHovered);
     }
+
+    public void Open(Vector2 position)
+    {
+        Position = position;
+        PositionCondition = ImGuiCond.Always;
+        if (!IsOpen)
+        {
+            Sync();
+        }
+        IsOpen = true;
+    }
     private void OnMainWindowToggle()
     {
         this.IsOpen = !this.IsOpen;
@@ -161,6 +172,34 @@ internal class MainWindow : Window, IDisposable
     {
         base.OnOpen();
         Sync();
+    }
+
+    public void DrawStandalone()
+    {
+        if (!IsOpen)
+            return;
+
+        if (Position.HasValue)
+        {
+            ImGui.SetNextWindowPos(Position.Value, PositionCondition);
+        }
+
+        if (Size.HasValue)
+        {
+            ImGui.SetNextWindowSize(Size.Value, SizeCondition);
+        }
+
+        var open = IsOpen;
+        if (!ImGui.Begin(WindowName, ref open, Flags))
+        {
+            IsOpen = open;
+            ImGui.End();
+            return;
+        }
+
+        IsOpen = open;
+        Draw();
+        ImGui.End();
     }
 
 
