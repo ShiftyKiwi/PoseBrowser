@@ -694,7 +694,9 @@ internal class MainWindow : Window, IDisposable
         if (flags.HasFlag(ImportPoseFlags.ResetPreview))
             FileInPreview = null;
 
-        _brioService.ImportPoseTarget(path);
+        var includeBody = flags.HasFlag(ImportPoseFlags.Body);
+        var includeFace = flags.HasFlag(ImportPoseFlags.Face);
+        _brioService.ImportPoseTarget(path, includeBody, includeFace);
 	}
 
 	public bool PressPreview() {

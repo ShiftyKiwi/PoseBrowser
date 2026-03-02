@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
@@ -15,6 +17,8 @@ namespace PoseBrowser.IPC;
 internal class BrioService : IDisposable
 {
     private const int MinimumSupportedBrioApiMajor = 2;
+    private static readonly string[] FaceBonePrefixes = ["j_f_"];
+    private static readonly string[] FaceBoneNames = ["j_kao", "j_ago"];
 
     public bool IsBrioAvailable { get; private set; } = false;
     public (int Major, int Minor) LastDetectedApiVersion { get; private set; } = default;
@@ -66,7 +70,7 @@ internal class BrioService : IDisposable
             return default;
         }
     }
-    public bool ImportPoseTarget(string path)
+    public bool ImportPoseTarget(string path, bool includeBody = true, bool includeFace = true)
     {
         var gameObject = GetTargetGameObject();
         if(gameObject == null)
@@ -96,8 +100,16 @@ internal class BrioService : IDisposable
             PoseBrowser.Log.Warning(ex, $"Brio pose snapshot IPC is unavailable for target {gameObject.Name}. Apply will continue without saved undo state.");
         }
 
-        // apply pose
-        var loaded = InvokePoseLoadFromFile(gameObject, path);
+        bool loaded;
+        if (includeBody && includeFace)
+        {
+            loaded = InvokePoseLoadFromFile(gameObject, path);
+        }
+        else
+        {
+            loaded = ImportFilteredPoseTarget(gameObject, path, includeBody, includeFace);
+        }
+
         if(!loaded)
         {
             PoseBrowser.Log.Warning($"Pose import failed: Brio rejected file '{path}' for target {gameObject.Name}.");
@@ -108,6 +120,77 @@ internal class BrioService : IDisposable
         }
 
         return loaded;
+    }
+
+    private bool ImportFilteredPoseTarget(IGameObject gameObject, string path, bool includeBody, bool includeFace)
+    {
+        if (!includeBody && !includeFace)
+        {
+            PoseBrowser.Log.Warning($"Pose import skipped for '{path}': neither body nor face import was requested.");
+            return false;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            var filteredJson = FilterPoseJson(json, includeBody, includeFace);
+            if (filteredJson == null)
+            {
+                PoseBrowser.Log.Warning($"Pose import failed: could not filter pose file '{path}'.");
+                return false;
+            }
+
+            var isLegacyCmToolPose = string.Equals(Path.GetExtension(path), ".cmp", StringComparison.OrdinalIgnoreCase);
+            return InvokePoseLoadFromJson(gameObject, filteredJson, isLegacyCmToolPose);
+        }
+        catch (Exception ex)
+        {
+            PoseBrowser.Log.Warning(ex, $"Pose import failed while filtering '{path}'.");
+            return false;
+        }
+    }
+
+    private static string? FilterPoseJson(string json, bool includeBody, bool includeFace)
+    {
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(json);
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (root is not JsonObject rootObject)
+            return null;
+
+        if (!includeBody && rootObject.ContainsKey("Position"))
+            rootObject.Remove("Position");
+        if (!includeBody && rootObject.ContainsKey("Rotation"))
+            rootObject.Remove("Rotation");
+        if (!includeBody && rootObject.ContainsKey("Scale"))
+            rootObject.Remove("Scale");
+
+        if (rootObject["Bones"] is JsonObject bones)
+        {
+            foreach (var boneName in bones.Select(kvp => kvp.Key).ToList())
+            {
+                var isFaceBone = IsFaceBone(boneName);
+                if ((isFaceBone && !includeFace) || (!isFaceBone && !includeBody))
+                    bones.Remove(boneName);
+            }
+        }
+
+        return rootObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static bool IsFaceBone(string boneName)
+    {
+        if (FaceBoneNames.Contains(boneName, StringComparer.OrdinalIgnoreCase))
+            return true;
+
+        return FaceBonePrefixes.Any(prefix => boneName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
     private IGameObject? GetTargetGameObject()
     {
