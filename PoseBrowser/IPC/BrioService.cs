@@ -18,7 +18,6 @@ internal class BrioService : IDisposable
 {
     private const int MinimumSupportedBrioApiMajor = 2;
     private static readonly string[] FaceBonePrefixes = ["j_f_"];
-    private static readonly string[] FaceAnchorBoneNames = ["j_kao", "j_ago"];
 
     public bool IsBrioAvailable { get; private set; } = false;
     public (int Major, int Minor) LastDetectedApiVersion { get; private set; } = default;
@@ -153,17 +152,17 @@ internal class BrioService : IDisposable
 
     private static string? FilterPoseJson(string json, bool includeBody, bool includeFace, string? currentPoseJson)
     {
-        JsonNode? root;
+        JsonObject? sourceRootObject;
         try
         {
-            root = JsonNode.Parse(json);
+            sourceRootObject = JsonNode.Parse(json) as JsonObject;
         }
         catch
         {
             return null;
         }
 
-        if (root is not JsonObject rootObject)
+        if (sourceRootObject == null)
             return null;
 
         JsonObject? currentRootObject = null;
@@ -182,6 +181,12 @@ internal class BrioService : IDisposable
             }
         }
 
+        if (includeFace && !includeBody && currentRootObject != null)
+        {
+            return MergeFaceBonesIntoCurrentPose(sourceRootObject, currentRootObject);
+        }
+
+        var rootObject = sourceRootObject;
         if (!includeBody)
         {
             if (currentRootObject != null)
@@ -207,32 +212,30 @@ internal class BrioService : IDisposable
                     continue;
                 }
 
-                if (includeFace && !includeBody && FaceAnchorBoneNames.Contains(boneName, StringComparer.OrdinalIgnoreCase) && bones[boneName] is JsonObject anchorBone)
-                {
-                    if (currentBones?[boneName] is JsonObject currentAnchorBone)
-                    {
-                        CopyBoneProperty(anchorBone, currentAnchorBone, "Position");
-                    }
-                    else
-                    {
-                        anchorBone.Remove("Position");
-                    }
-                }
-            }
-
-            if (includeFace && !includeBody && currentBones != null)
-            {
-                foreach (var anchorBoneName in FaceAnchorBoneNames)
-                {
-                    if (bones[anchorBoneName] is not JsonObject sourceAnchorBone || currentBones[anchorBoneName] is not JsonObject currentAnchorBone)
-                        continue;
-
-                    CopyBoneProperty(sourceAnchorBone, currentAnchorBone, "Position");
-                }
             }
         }
 
         return rootObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static string MergeFaceBonesIntoCurrentPose(JsonObject sourceRootObject, JsonObject currentRootObject)
+    {
+        var mergedRoot = currentRootObject.DeepClone() as JsonObject ?? new JsonObject();
+        var mergedBones = mergedRoot["Bones"] as JsonObject;
+        var sourceBones = sourceRootObject["Bones"] as JsonObject;
+
+        if (mergedBones == null || sourceBones == null)
+            return mergedRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+
+        foreach (var (boneName, boneNode) in sourceBones)
+        {
+            if (boneNode == null || !IsFaceBone(boneName))
+                continue;
+
+            mergedBones[boneName] = boneNode.DeepClone();
+        }
+
+        return mergedRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
     }
 
     private static void CopyRootTransform(JsonObject destination, JsonObject source)
@@ -260,12 +263,7 @@ internal class BrioService : IDisposable
     }
 
     private static bool IsFaceBone(string boneName)
-    {
-        if (FaceAnchorBoneNames.Contains(boneName, StringComparer.OrdinalIgnoreCase))
-            return true;
-
-        return FaceBonePrefixes.Any(prefix => boneName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
-    }
+        => FaceBonePrefixes.Any(prefix => boneName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     private IGameObject? GetTargetGameObject()
     {
         var candidates = new IGameObject?[]

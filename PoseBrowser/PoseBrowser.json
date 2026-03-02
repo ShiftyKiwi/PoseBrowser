@@ -4,7 +4,7 @@
     "Punchline": "A pose browser to work with Brio.",
     "Description": "A pose browser interfacing with brio.", 
     "RepoUrl": "https://github.com/ShiftyKiwi/PoseBrowser",
-    "AssemblyVersion": "0.0.0.43",
+    "AssemblyVersion": "0.0.0.44",
     "InternalName": "PoseBrowser",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 14,
