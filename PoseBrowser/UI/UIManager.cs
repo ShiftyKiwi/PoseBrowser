@@ -74,6 +74,7 @@ internal class UIManager : IDisposable
 
         _configurationService.OnConfigurationChanged += ApplySettings;
 
+        _pluginInterface.UiBuilder.DisableGposeUiHide = true;
         _pluginInterface.UiBuilder.Draw += DrawUI;
         _pluginInterface.UiBuilder.OpenConfigUi += ShowSettingsWindow;
         _pluginInterface.UiBuilder.OpenMainUi += ShowMainWindow;
