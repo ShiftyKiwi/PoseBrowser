@@ -18,6 +18,8 @@ internal class BrioService : IDisposable
 {
     private const int MinimumSupportedBrioApiMajor = 2;
     private static readonly string[] FaceBonePrefixes = ["j_f_"];
+    private static readonly string[] ExpressionExcludedFaceBonePrefixes = ["j_f_noanim_"];
+    private static readonly string[] ExpressionExcludedFaceBoneNames = ["j_f_face", "j_f_ago"];
 
     public bool IsBrioAvailable { get; private set; } = false;
     public (int Major, int Minor) LastDetectedApiVersion { get; private set; } = default;
@@ -229,7 +231,7 @@ internal class BrioService : IDisposable
 
         foreach (var (boneName, boneNode) in sourceBones)
         {
-            if (boneNode is not JsonObject sourceBone || !IsFaceBone(boneName))
+            if (boneNode is not JsonObject sourceBone || !ShouldImportExpressionBone(boneName))
                 continue;
 
             if (mergedBones[boneName] is not JsonObject targetBone)
@@ -270,6 +272,17 @@ internal class BrioService : IDisposable
 
     private static bool IsFaceBone(string boneName)
         => FaceBonePrefixes.Any(prefix => boneName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+    private static bool ShouldImportExpressionBone(string boneName)
+    {
+        if (!IsFaceBone(boneName))
+            return false;
+
+        if (ExpressionExcludedFaceBoneNames.Contains(boneName, StringComparer.OrdinalIgnoreCase))
+            return false;
+
+        return !ExpressionExcludedFaceBonePrefixes.Any(prefix => boneName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
     private IGameObject? GetTargetGameObject()
     {
         var candidates = new IGameObject?[]
