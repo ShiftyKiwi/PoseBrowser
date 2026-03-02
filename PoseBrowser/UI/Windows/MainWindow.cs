@@ -22,7 +22,6 @@ namespace PoseBrowser.UI.Windows;
 internal class MainWindow : Window, IDisposable
 {
     private const string WindowId = "pose_browser_main_window_v2";
-    private static bool _diagnosticDrawLogged;
 
     private readonly ConfigurationService _configurationService;
     private readonly BrioService _brioService;
@@ -69,7 +68,6 @@ internal class MainWindow : Window, IDisposable
 
     public void Open(Vector2 position)
     {
-        _diagnosticDrawLogged = false;
         Position = position;
         PositionCondition = ImGuiCond.Always;
         if (!IsOpen)
@@ -181,24 +179,26 @@ internal class MainWindow : Window, IDisposable
         if (!IsOpen)
             return;
 
-        ImGui.SetNextWindowPos(new Vector2(120f, 120f), ImGuiCond.Always);
-        ImGui.SetNextWindowSize(new Vector2(520f, 260f), ImGuiCond.Always);
+        if (Position.HasValue)
+        {
+            ImGui.SetNextWindowPos(Position.Value, PositionCondition);
+        }
+
+        if (Size.HasValue)
+        {
+            ImGui.SetNextWindowSize(Size.Value, SizeCondition);
+        }
 
         var open = IsOpen;
-        var began = ImGui.Begin("PoseBrowser Diagnostic###pose_browser_diagnostic_window", ref open, ImGuiWindowFlags.NoCollapse);
+        if (!ImGui.Begin(WindowName, ref open, Flags))
+        {
+            IsOpen = open;
+            ImGui.End();
+            return;
+        }
+
         IsOpen = open;
-
-        if (!_diagnosticDrawLogged)
-        {
-            PoseBrowser.Log.Info($"Diagnostic window draw attempt. GPose={_clientStateService.IsGPosing}, began={began}, open={open}");
-            _diagnosticDrawLogged = true;
-        }
-
-        if (began)
-        {
-            Draw();
-        }
-
+        Draw();
         ImGui.End();
     }
 
@@ -210,26 +210,165 @@ internal class MainWindow : Window, IDisposable
         {
             if (!_clientStateService.IsGPosing)
             {
-                ImGui.TextWrapped("PoseBrowser diagnostic window.");
+                ImGui.TextWrapped("PoseBrowser can be opened anywhere, but pose preview and apply only work while you are in GPose.");
                 ImGui.Spacing();
-                ImGui.TextWrapped("Outside GPose.");
+                ImGui.TextWrapped("Enter GPose, target a player, then browse or preview poses.");
                 ImGui.Spacing();
-                ImGui.Text($"Brio available: {_brioService.IsBrioAvailable}");
+                if (ImGui.Button("Open Settings"))
+                {
+                    UIManager.Instance.ToggleSettingsWindow();
+                }
                 return;
             }
 
-            ImGui.TextWrapped("PoseBrowser diagnostic window.");
+            if (UserPreviewingPoseHovered_previous != UserPreviewingPoseHovered && !UserPreviewingPoseHovered)
+                KeyUpPreviewPoseHovered();
+            UserPreviewingPoseHovered_previous = UserPreviewingPoseHovered;
+
+            DrawImageModal();
+
+            var files = BrowserPoseFiles;
+            if (!string.IsNullOrWhiteSpace(Search))
+                files = files.Where(f => f.Path.Contains(Search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            DrawToolBar(files.Count);
             ImGui.Spacing();
-            ImGui.TextWrapped("GPose test view active.");
-            ImGui.Spacing();
-            ImGui.Text($"Brio available: {_brioService.IsBrioAvailable}");
-            ImGui.Text($"Library count: {_configurationService.Configuration.Filesystem.BrowserLibraryPaths.Count}");
-            ImGui.Text($"Pose cache count: {BrowserPoseFiles.Count}");
-            ImGui.Spacing();
-            if (ImGui.Button("Run Sync"))
+
+            ImGui.BeginChild("PoseBrowserFileGrid", ImGui.GetContentRegionAvail());
+            bool anyHovered = false;
+            int col = 1;
+            try
             {
-                Sync();
+                foreach (var file in files)
+                {
+                    if (FilterImagesOnly && file.ImagePath == null) continue;
+
+                    var ishovering = FileInFocus == file;
+                    float borderSize = ImGui.GetStyle().FramePadding.X;
+                    ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, borderSize);
+
+                    var imageTex = _configurationService.Configuration.Appearance.BrowserEnableImages &&
+                                   file.ImagePath != null
+                                       ? _textureProvidereService.GetFromFile(file.ImagePath)
+                                       : null;
+
+                    if (imageTex != null)
+                    {
+                        ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
+                        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(borderSize));
+                        var textureWrap = imageTex.GetWrapOrEmpty();
+
+                        if (CropImages)
+                        {
+                            (var uv0, var uv1) = CropRatioImage(textureWrap);
+                            ImGui.ImageButton(textureWrap.Handle, ThumbSize2D, uv0, uv1);
+                        }
+                        else
+                        {
+                            ImGui.ImageButton(textureWrap.Handle, ScaleThumbImage(textureWrap));
+                        }
+
+                        ImGui.PopStyleVar();
+                        ImGui.PopStyleColor();
+                    }
+                    else
+                    {
+                        ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, borderSize);
+                        ImGui.PushStyleColor(ImGuiCol.Border,
+                                             ImGui.GetStyle().Colors[
+                                                 ishovering ? (int)ImGuiCol.ButtonHovered : (int)ImGuiCol.WindowBg]);
+                        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
+                        ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
+
+                        ImGui.Button($"{file.Name}##ContextMenu##{file.Path}", ThumbSize2D + new Vector2(borderSize * 2));
+
+                        ImGui.PopStyleColor(3);
+                        ImGui.PopStyleVar();
+                    }
+
+                    ImGui.PopStyleVar(1);
+
+                    file.IsVisible = ImGui.IsItemVisible();
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        FileInFocus = file;
+                        anyHovered = true;
+                    }
+
+                    var fileExt = Path.GetExtension(file.Path);
+                    string fileType;
+                    if (fileExt == ".pose")
+                        fileType = "Anamnesis pose";
+                    else if (fileExt == ".cmp")
+                        fileType = "Concept Matrix pose";
+                    else
+                        fileType = "Unknown file type";
+
+                    if (ImGui.BeginPopupContextItem($"PoseBrowser##ContextMenu##{file.Path}",
+                                                    ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.AnyPopupId))
+                    {
+                        ImGui.Text(file.Name);
+                        ImGui.Separator();
+                        ImGui.Text(fileType);
+
+                        if (ImGui.Selectable($"{ShortPath.Replace(file.Path, "").TrimStart(new char[] { '\\', '/' })}"))
+                            ImGui.SetClipboardText(Path.GetDirectoryName(file.Path));
+
+                        if (imageTex != null)
+                            ImGui.Text($"Image Size: {imageTex.GetWrapOrEmpty().Width}*{imageTex.GetWrapOrEmpty().Height}");
+
+                        if (ImGui.Selectable("Apply to target"))
+                            ImportPose(file.Path,
+                                ImportPoseFlags.SaveTempAfter | ImportPoseFlags.ResetPreview | ImportPoseFlags.Face | ImportPoseFlags.Body);
+                        if (ImGui.Selectable("Apply body to target"))
+                            ImportPose(file.Path,
+                                ImportPoseFlags.SaveTempAfter | ImportPoseFlags.ResetPreview | ImportPoseFlags.Body);
+                        if (ImGui.Selectable("Apply expression to target"))
+                            ImportPose(file.Path,
+                                ImportPoseFlags.SaveTempAfter | ImportPoseFlags.ResetPreview | ImportPoseFlags.Face);
+
+                        ImGui.EndPopup();
+                    }
+
+                    if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                    {
+                        var imageFilesPaths = FindExtraImages(file);
+                        if (imageFilesPaths != null)
+                        {
+                            DisplayImages = imageFilesPaths.Select((ifp, k) => new { ifp, k })
+                                                           .ToDictionary(x => x.k, x => x.ifp);
+                            PoseBrowser.Log.Debug($"Found {DisplayImages.Count} images:\n{string.Join("\n", DisplayImages)}");
+                        }
+                    }
+
+                    if (Columns == 0 || col < Columns)
+                    {
+                        col++;
+                        ImGui.SameLine();
+                    }
+                    else
+                    {
+                        col = 1;
+                    }
+
+                    if (Columns == 0 && ImGui.GetContentRegionAvail().X < ThumbSize2D.X)
+                        ImGui.Text("");
+                }
+
+                if (!anyHovered)
+                    FileInFocus = null;
+
+                if (FileInFocus != FileInPreview && FileInPreview != null)
+                    RestoreTempPose();
+                if (IsHolding && FileInFocus != null && FileInPreview == null)
+                    PressPreview();
             }
+            catch (Exception e)
+            {
+                PoseBrowser.Log.Debug(e, "Suppressed error during file loop");
+            }
+            ImGui.EndChild();
         }
         catch (Exception e)
         {
