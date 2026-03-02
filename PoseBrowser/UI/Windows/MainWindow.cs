@@ -21,6 +21,8 @@ namespace PoseBrowser.UI.Windows;
 
 internal class MainWindow : Window, IDisposable
 {
+    private const string WindowId = "pose_browser_main_window_v2";
+
     private readonly ConfigurationService _configurationService;
     private readonly BrioService _brioService;
     private readonly IClientState _clientStateService;
@@ -32,10 +34,10 @@ internal class MainWindow : Window, IDisposable
         IClientState clientStateService,
         ITextureProvider textureProvider,
         InputService input,
-        BrioService brioService) : base($"{PoseBrowser.Name} [{configService.Version}]###pose_browser_main_window",
+        BrioService brioService) : base($"{PoseBrowser.Name} [{configService.Version}]###" + WindowId,
                                         ImGuiWindowFlags.None)
     {
-        Namespace = "pose_browser_main_namespace";
+        Namespace = "pose_browser_main_namespace_v2";
 
         _configurationService = configService;
         _brioService = brioService;
@@ -43,6 +45,11 @@ internal class MainWindow : Window, IDisposable
         _textureProvidereService = textureProvider;
         _inputService = input;
 
+        RespectCloseHotkey = false;
+        Position = new Vector2(120f, 120f);
+        PositionCondition = ImGuiCond.FirstUseEver;
+        Size = new Vector2(680f, 480f);
+        SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = new WindowSizeConstraints
         {
             MaximumSize = new Vector2(2000, 5000),
