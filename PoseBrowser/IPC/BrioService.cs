@@ -18,7 +18,6 @@ internal class BrioService : IDisposable
 {
     private const int MinimumSupportedBrioApiMajor = 2;
     private static readonly string[] FaceBonePrefixes = ["j_f_"];
-    private static readonly string[] FaceBoneNames = ["j_kao", "j_ago"];
 
     public bool IsBrioAvailable { get; private set; } = false;
     public (int Major, int Minor) LastDetectedApiVersion { get; private set; } = default;
@@ -187,9 +186,6 @@ internal class BrioService : IDisposable
 
     private static bool IsFaceBone(string boneName)
     {
-        if (FaceBoneNames.Contains(boneName, StringComparer.OrdinalIgnoreCase))
-            return true;
-
         return FaceBonePrefixes.Any(prefix => boneName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
     private IGameObject? GetTargetGameObject()
